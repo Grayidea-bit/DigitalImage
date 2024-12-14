@@ -77,15 +77,13 @@ def convolution(img,kernel):
         for i in range(m):
             pad[i+1][j+1] = img[i][j];
 
-    (x,y)=pad.shape;
-    Out = np.zeros((x, y), dtype=np.float64)
-    for i in range(x):
-        for j in range(y):
+    Out = np.zeros((m, n), dtype=np.float64)
+    for i in range(m):
+        for j in range(n):
             temp=0;
             for w in range(len(kernel)):                       
-                for l in range(len(kernel[w])):  
-                    if i+l<x and j+w<y:          
-                        temp += int(pad[i+l][j+w])*kernel[l][w];
+                for l in range(len(kernel[w])):          
+                    temp += int(pad[i+l][j+w])*kernel[l][w];
             Out[i][j] = max(0, min(255, temp)); 
     return Out;
 
@@ -95,9 +93,7 @@ def sobel(img):
 
     Gx = convolution(img,horizontal);
     Gy = convolution(img,vertical);
-    print(Gx);
-    print(Gy);
-    M = np.abs(Gx)+np.abs(Gy);
+    M = np.sqrt(Gx**2+Gy**2);
     return M;
 
 def nonMaximum(img):
@@ -135,8 +131,8 @@ def nonMaximum(img):
     return Out;
 
 def thresholding(img):
-    high = 200;
-    low = 40;
+    high = 250;
+    low = 200;
     Out = np.zeros_like(img);
     (x,y)=img.shape;
     for i in range(x):
@@ -152,48 +148,6 @@ def thresholding(img):
                                 Out[i][j]=255;
                 if(Out[i][j]!=255):
                     Out[i][j]=255;
-    return Out;
-                
-def vote(img):
-    (x,y)=img.shape;
-    maxSize = int(np.sqrt(x**2+y**2));
-    acc = np.zeros((maxSize*2,180),dtype=int);
-    for i in range(x):
-        for j in range(y):
-            for d in range(1,180):
-                r = d*3.14/180;
-                s = int(i*np.cos(r)+j*np.sin(r));
-                print(s+maxSize,r);
-                acc[s+maxSize,d]+=1;
-    return acc;
-
-def findLine(img, acc):
-    (x,y) = img.shape;
-    maxSize = int(np.sqrt(x**2+y**2));
-    line=[];
-    for i in range(maxSize*2):
-        for j in range(180):
-            if(acc[i][j]>200):
-                line.append([i,j]);
-    print("Lines found:", line);
-    return line;
-
-def draw(img,xMin,yMin,xMax,yMax):
-    Out = img;
-
-def drawLine(img, line):
-    Out = np.zeros_like(img);
-    for rho, theta in line:
-        print(f"Drawing line with rho={rho}, theta={theta}")  # 添加打印语句
-        a = np.cos(theta)
-        b = np.sin(theta)
-        x0 = a * rho
-        y0 = b * rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
-        cv.line(Out, (x1, y1), (x2, y2), 255, 2)
     return Out;
 
 def signName(img,name,m,n):
@@ -216,26 +170,11 @@ def signName(img,name,m,n):
 
 gaussian = [[1/16,2/16,1/16],[2/16,4/16,2/16],[1/16,2/16,1/16]]; #gaussian filter               
 
-ori = cv.imread("D1149576_HW3/oritest2.jpg",0);
-name = cv.imread("D1149576_HW3/name.jpg",0);
-
+ori = cv.imread("DigitalImage/D1149576_HW3/oritest2.jpg",0);
+#name = cv.imread("D1149576_HW3/name.jpg",0);
 (x,y)=ori.shape;
 temp = con(ori,x,y,gaussian,0,0);
 temp = sobel(temp);
-cv.imshow("sobel",temp);
-cv.waitKey();
 temp = nonMaximum(temp);
-cv.imshow("nonMaximum",temp);
-cv.waitKey();
 temp = thresholding(temp);
-cv.imshow("thresholding",temp);
-cv.waitKey();
-acc = vote(temp);
-line = findLine(temp,acc);
-temp = drawLine(temp,line);
-cv.imshow("hough",temp);
-cv.waitKey();
-# (m,n)=temp.shape;
-# temp = signName(temp,name,m,n);
-# cv.imshow("siged",temp);
-# cv.waitKey();
+cv.imwrite("DigitalImage/D1149576_HW3/thresholding.jpg",temp);

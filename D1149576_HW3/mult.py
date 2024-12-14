@@ -1,6 +1,5 @@
 import cv2 as cv;
 import numpy as np;
-from concurrent.futures import ThreadPoolExecutor
 
 def con(img,m,n,kernel,bias,padding):
     if(padding==1): #補白邊 
@@ -78,15 +77,13 @@ def convolution(img,kernel):
         for i in range(m):
             pad[i+1][j+1] = img[i][j];
 
-    (x,y)=pad.shape;
-    Out = np.zeros((x, y), dtype=np.float64)
-    for i in range(x):
-        for j in range(y):
+    Out = np.zeros((m, n), dtype=np.float64)
+    for i in range(m):
+        for j in range(n):
             temp=0;
             for w in range(len(kernel)):                       
-                for l in range(len(kernel[w])):  
-                    if i+l<x and j+w<y:          
-                        temp += int(pad[i+l][j+w])*kernel[l][w];
+                for l in range(len(kernel[w])):          
+                    temp += int(pad[i+l][j+w])*kernel[l][w];
             Out[i][j] = max(0, min(255, temp)); 
     return Out;
 
@@ -96,9 +93,7 @@ def sobel(img):
 
     Gx = convolution(img,horizontal);
     Gy = convolution(img,vertical);
-    print(Gx);
-    print(Gy);
-    M = np.abs(Gx)+np.abs(Gy);
+    M = np.sqrt(Gx**2+Gy**2);
     return M;
 
 def nonMaximum(img):
@@ -136,8 +131,8 @@ def nonMaximum(img):
     return Out;
 
 def thresholding(img):
-    high = 200;
-    low = 40;
+    high = 250;
+    low = 200;
     Out = np.zeros_like(img);
     (x,y)=img.shape;
     for i in range(x):
@@ -154,55 +149,54 @@ def thresholding(img):
                 if(Out[i][j]!=255):
                     Out[i][j]=255;
     return Out;
-                
-def vote(img):
-    (x, y) = img.shape
-    maxSize = int(np.sqrt(x**2 + y**2))
-    acc = np.zeros((maxSize * 2, 180), dtype=int)
-    
-    def process_pixel(i, j):
-        local_acc = np.zeros((maxSize * 2, 180), dtype=int)
-        for d in range(1, 180):
-            r = d * np.pi / 180
-            s = int(i * np.cos(r) + j * np.sin(r))
-            local_acc[s + maxSize, d] += 1
-        return local_acc
-    
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_pixel, i, j) for i in range(x) for j in range(y)]
-        for future in futures:
-            local_acc = future.result()
-            acc += local_acc
-    
-    return acc
 
-def findLine(img, acc):
+
+def vote(img):
+    max=0;
+    (x,y)=img.shape;
+    maxSize = int(np.sqrt(x**2+y**2));
+    acc = np.zeros((maxSize*2,180),dtype=int);
+    for i in range(x):
+        for j in range(y):
+            if(img[i][j]==255):
+                for d in range(180):
+                    r = d*3.14/180;
+                    s = int(j*np.cos(r)+i*np.sin(r));
+                    #print(s+maxSize,r);
+                    acc[s+maxSize,d]+=1;
+                    if(acc[s+maxSize,d]>max): max = acc[s+maxSize,d];
+    return acc, max;
+
+def findLine(img, acc, max):
     (x,y) = img.shape;
     maxSize = int(np.sqrt(x**2+y**2));
+    threshold = max * 0.3;
     line=[];
     for i in range(maxSize*2):
         for j in range(180):
-            if(acc[i][j]>200):
-                line.append([i,j]);
-    print("Lines found:", line);
+            #print(acc[i][j]);
+            if(acc[i][j]>threshold):
+                line.append([i-maxSize,j]);
+    #print("Lines found:", line);
+    print(threshold);
     return line;
 
-def draw(img,xMin,yMin,xMax,yMax):
-    Out = img;
 
 def drawLine(img, line):
-    Out = np.zeros_like(img);
+    Out = np.copy(img);
+    height, width, c = img.shape
     for rho, theta in line:
-        print(f"Drawing line with rho={rho}, theta={theta}")  # 添加打印语句
-        a = np.cos(theta)
-        b = np.sin(theta)
+        #print("Drawing line with rho={",rho,"}, theta={",theta,"}")  # 添加打印语句
+        r = theta*3.14/180;
+        a = np.cos(r)
+        b = np.sin(r)
         x0 = a * rho
         y0 = b * rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
-        cv.line(Out, (x1, y1), (x2, y2), 255, 2)
+        x1 = int(x0 + 10000 * (-b))
+        y1 = int(y0 + 10000 * (a))
+        x2 = int(x0 - 10000 * (-b))
+        y2 = int(y0 - 10000 * (a))
+        cv.line(Out, (x1, y1), (x2, y2), (0,0,255), 1)
     return Out;
 
 def signName(img,name,m,n):
@@ -215,37 +209,30 @@ def signName(img,name,m,n):
     ad_name = pool(tempName,adjust,adjust,1);   #利用pool縮小
     (x2,y2)=ad_name.shape;                  #縮小後的長寬
 
-    print(ad_name);
+    #print(ad_name);
     if (m - x2 >= 0) and (n - y2 >= 0):     #確保範圍正確
         for j in range(y2):
             for i in range(x2):
                 if(ad_name[i][j]>30): 
-                    img[m-x2+i-10][n-y2+j-10]=255;
+                    img[m-x2+i-10][n-y2+j-10][0]=0;
+                    img[m-x2+i-10][n-y2+j-10][1]=255;
+                    img[m-x2+i-10][n-y2+j-10][2]=0;
     return img;
 
 gaussian = [[1/16,2/16,1/16],[2/16,4/16,2/16],[1/16,2/16,1/16]]; #gaussian filter               
 
-ori = cv.imread("D1149576_HW3/oritest2.jpg",0);
-name = cv.imread("D1149576_HW3/name.jpg",0);
-cv.imshow("ori",ori);
-cv.waitKey();
+ori = cv.imread("DigitalImage/D1149576_HW3/self.jpg",0);
+rgb = cv.imread("DigitalImage/D1149576_HW3/self.jpg");
+name = cv.imread("DigitalImage/D1149576_HW3/name.jpg",0);
 (x,y)=ori.shape;
 temp = con(ori,x,y,gaussian,0,0);
 temp = sobel(temp);
-cv.imshow("sobel",temp);
-cv.waitKey();
 temp = nonMaximum(temp);
-cv.imshow("nonMaximum",temp);
-cv.waitKey();
 temp = thresholding(temp);
-cv.imshow("thresholding",temp);
-cv.waitKey();
-acc = vote(temp);
-line = findLine(temp,acc);
-temp = drawLine(temp,line);
-cv.imshow("hough",temp);
-cv.waitKey();
-# (m,n)=temp.shape;
-# temp = signName(temp,name,m,n);
-# cv.imshow("siged",temp);
-# cv.waitKey();
+cv.imwrite("DigitalImage/D1149576_HW3/thresholding3.jpg",temp);
+acc,m = vote(temp);
+line = findLine(temp,acc,m);
+temp = drawLine(rgb,line);
+temp = signName(temp,name,x,y);
+cv.imwrite("DigitalImage/D1149576_HW3/finish3.jpg",temp);
+
